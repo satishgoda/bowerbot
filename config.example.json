@@ -1,0 +1,34 @@
+{
+  "llm": {
+    "model": "gpt-4o",
+    "api_key": "YOUR_API_KEY_HERE",
+    "temperature": 0.1,
+    "max_tokens": 4096
+  },
+  "scene_defaults": {
+    "meters_per_unit": 1.0,
+    "up_axis": "Y",
+    "default_room_bounds": [
+      10.0,
+      3.0,
+      8.0
+    ]
+  },
+  "skills": {
+    "local": {
+      "enabled": true,
+      "config": {
+        "paths": [
+          "./assets"
+        ]
+      }
+    },
+    "sketchfab": {
+      "enabled": false,
+      "config": {
+        "token": "YOUR_SKETCHFAB_TOKEN"
+      }
+    }
+  },
+  "projects_dir": "./scenes"
+}

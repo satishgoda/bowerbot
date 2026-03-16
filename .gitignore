@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# BowerBot — sensitive config (contains API keys)
+# Global config is at ~/.bowerbot/config.json, but if someone
+# copies it locally for debugging, don't commit it
+config.json
+
+# BowerBot — project outputs
+scenes/
+output/
+assets/
+
+# BowerBot — packaged files
+*.usdz
+*.usdc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

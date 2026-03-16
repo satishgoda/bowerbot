@@ -1,0 +1,511 @@
+"""Assembly skill — exposes USD scene assembly as tools for the LLM.
+
+This skill holds the state of the scene being built (the current USD stage)
+and provides tools to create, populate, validate, and package it.
+When a Project is set, all files go into the project directory.
+"""
+
+from __future__ import annotations
+
+import logging
+import shutil
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from bowerbot.project import Project
+
+from bowerbot.config import SceneDefaults
+from bowerbot.engine.packager import Packager
+from bowerbot.engine.scene_graph import SceneGraphBuilder
+from bowerbot.engine.stage_writer import StageWriter
+from bowerbot.engine.validator import SceneValidator
+from bowerbot.schemas import AssetMetadata, SceneObject
+from bowerbot.skills.base import Skill, SkillCategory, Tool, ToolResult
+
+logger = logging.getLogger(__name__)
+
+
+class AssemblySkill(Skill):
+    """USD Assembly tools — the LLM calls these to build scenes.
+
+    Maintains a StageWriter instance across tool calls so the LLM
+    can create a stage, place assets into it, validate, and package.
+    """
+
+    name = "assembly"
+    category = SkillCategory.DCC
+
+    def __init__(
+        self,
+        scene_defaults: SceneDefaults | None = None,
+    ) -> None:
+        defaults = scene_defaults or SceneDefaults()
+
+        self.writer = StageWriter(
+            meters_per_unit=defaults.meters_per_unit,
+            up_axis=defaults.up_axis,
+        )
+        self.graph = SceneGraphBuilder(room_bounds=defaults.default_room_bounds)
+        self.validator = SceneValidator(
+            meters_per_unit=defaults.meters_per_unit,
+            up_axis=defaults.up_axis,
+        )
+        self.packager = Packager()
+
+        self._project = None
+        self._stage_path: Path | None = None
+        self._assets_dir: Path | None = None
+        self._object_count: int = 0
+
+    def set_project(self, project: Project) -> None:
+        """Bind this skill to a project. All output goes into the project folder."""
+        self._project = project
+        self._stage_path = project.scene_path
+        self._assets_dir = project.assets_dir
+
+        # If the scene file already exists, reopen it
+        if self._stage_path.exists():
+            self.writer.open_stage(self._stage_path)
+            # Count existing objects
+            objects = self.writer.list_prims()
+            self._object_count = len(objects)
+            logger.info(f"Resumed project '{project.name}' with {self._object_count} object(s)")
+
+    def _resolve_output_dir(self) -> Path:
+        """Get the directory for output files."""
+        if self._project:
+            return self._project.path
+        msg = "No project set. Use 'bowerbot new' to create a project first."
+        raise RuntimeError(msg)
+
+    def _resolve_assets_dir(self) -> Path:
+        """Get the directory for asset files."""
+        if self._assets_dir:
+            self._assets_dir.mkdir(parents=True, exist_ok=True)
+            return self._assets_dir
+        msg = "No project set. Use 'bowerbot new' to create a project first."
+        raise RuntimeError(msg)
+
+    def _update_project_meta(self) -> None:
+        """Update project metadata if we're inside a project."""
+        if self._project:
+            self._project.meta.object_count = self._object_count
+            self._project.save()
+
+    def get_tools(self) -> list[Tool]:
+        return [
+            Tool(
+                name="create_stage",
+                description=(
+                    "Create a new empty USD stage with standard BowerBot hierarchy. "
+                    "Call this FIRST before placing any assets. "
+                    "Creates: /Scene/Architecture, /Scene/Furniture, /Scene/Products, "
+                    "/Scene/Lighting, /Scene/Props"
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "filename": {
+                            "type": "string",
+                            "description": "Name for the scene file (without extension). Example: 'retail_store'",
+                        },
+                    },
+                    "required": ["filename"],
+                },
+            ),
+            Tool(
+                name="place_asset",
+                description=(
+                    "Place a 3D asset into the current scene. The asset is added as a "
+                    "USD reference at the specified prim path with the given transform. "
+                    "Use the standard hierarchy: Furniture, Products, Lighting, Props."
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "asset_file_path": {
+                            "type": "string",
+                            "description": "Local file path to the .usda/.usdc/.usdz asset.",
+                        },
+                        "asset_name": {
+                            "type": "string",
+                            "description": "Human-readable name for this asset instance.",
+                        },
+                        "group": {
+                            "type": "string",
+                            "enum": ["Architecture", "Furniture", "Products", "Lighting", "Props"],
+                            "description": "Which scene group to place the asset in.",
+                        },
+                        "translate_x": {
+                            "type": "number",
+                            "description": "X position in meters. 0 = left edge of room.",
+                        },
+                        "translate_y": {
+                            "type": "number",
+                            "description": "Y position in meters. 0 = floor, 2.7 = typical ceiling.",
+                        },
+                        "translate_z": {
+                            "type": "number",
+                            "description": "Z position in meters. 0 = back wall.",
+                        },
+                        "rotate_y": {
+                            "type": "number",
+                            "description": "Rotation around Y axis in degrees. 0 = facing forward.",
+                            "default": 0.0,
+                        },
+                    },
+                    "required": ["asset_file_path", "asset_name", "group", "translate_x", "translate_y", "translate_z"],
+                },
+            ),
+            Tool(
+                name="compute_grid_layout",
+                description=(
+                    "Compute evenly spaced positions for N objects in a grid, "
+                    "centered in the room. Returns a list of (x, z) positions. "
+                    "Use this to plan furniture layouts before calling place_asset."
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "count": {
+                            "type": "integer",
+                            "description": "Number of objects to arrange.",
+                        },
+                        "spacing": {
+                            "type": "number",
+                            "description": "Distance between objects in meters.",
+                            "default": 2.0,
+                        },
+                    },
+                    "required": ["count"],
+                },
+            ),
+            Tool(
+                name="validate_scene",
+                description=(
+                    "Run validation checks on the current scene. "
+                    "Checks: defaultPrim, metersPerUnit, upAxis, and reference resolution. "
+                    "Call this after placing all assets and BEFORE packaging."
+                ),
+                parameters={"type": "object", "properties": {}},
+            ),
+            Tool(
+                name="package_scene",
+                description=(
+                    "Package the current scene into a .usdz file for distribution. "
+                    "Call validate_scene first to ensure correctness. "
+                    "Returns the path to the output .usdz file."
+                ),
+                parameters={"type": "object", "properties": {}},
+            ),
+            Tool(
+                name="list_scene",
+                description=(
+                    "List all objects currently in the scene with their prim paths, "
+                    "asset names, and positions. Use this to show the user what's "
+                    "in the scene so they can request changes."
+                ),
+                parameters={"type": "object", "properties": {}},
+            ),
+            Tool(
+                name="rename_prim",
+                description=(
+                    "Move/rename a prim to a new path in the scene hierarchy. "
+                    "This changes the USD prim path, letting the user reorganize "
+                    "the scene structure. The new path can be any valid USD path."
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "old_path": {
+                            "type": "string",
+                            "description": "Current prim path (e.g. '/Scene/Products/mug_01')",
+                        },
+                        "new_path": {
+                            "type": "string",
+                            "description": "New prim path (e.g. '/Scene/MyDisplay/CoffeeMug')",
+                        },
+                    },
+                    "required": ["old_path", "new_path"],
+                },
+            ),
+            Tool(
+                name="remove_prim",
+                description=(
+                    "Remove an object from the scene by its prim path."
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "prim_path": {
+                            "type": "string",
+                            "description": "Prim path to remove (e.g. '/Scene/Furniture/Table_01')",
+                        },
+                    },
+                    "required": ["prim_path"],
+                },
+            ),
+        ]
+
+    async def execute(self, tool_name: str, params: dict[str, Any]) -> ToolResult:
+        try:
+            match tool_name:
+                case "create_stage":
+                    return self._create_stage(params)
+                case "place_asset":
+                    return self._place_asset(params)
+                case "compute_grid_layout":
+                    return self._compute_grid_layout(params)
+                case "validate_scene":
+                    return self._validate_scene()
+                case "package_scene":
+                    return self._package_scene()
+                case "list_scene":
+                    return self._list_scene()
+                case "rename_prim":
+                    return self._rename_prim(params)
+                case "remove_prim":
+                    return self._remove_prim(params)
+                case _:
+                    return ToolResult(success=False, error=f"Unknown tool: {tool_name}")
+        except Exception as e:
+            logger.exception(f"Assembly tool error: {tool_name}")
+            return ToolResult(success=False, error=str(e))
+
+    def _create_stage(self, params: dict[str, Any]) -> ToolResult:
+        filename = params["filename"]
+        safe_name = "".join(c for c in filename if c.isalnum() or c in "_-").strip()
+        if not safe_name:
+            safe_name = "scene"
+
+        output_dir = self._resolve_output_dir()
+
+        # If inside a project, always use scene.usda
+        if self._project:
+            self._stage_path = self._project.scene_path
+        else:
+            self._stage_path = output_dir / f"{safe_name}.usda"
+
+        self._object_count = 0
+
+        if self._stage_path.exists():
+            self._stage_path.unlink()
+
+        self.writer.create_stage(self._stage_path)
+        self.writer.save()
+        self._update_project_meta()
+
+        logger.info(f"Created stage: {self._stage_path}")
+        return ToolResult(
+            success=True,
+            data={
+                "stage_path": str(self._stage_path),
+                "message": f"Stage created at {self._stage_path} with standard hierarchy.",
+            },
+        )
+
+    def _place_asset(self, params: dict[str, Any]) -> ToolResult:
+        if self._stage_path is None or self.writer.stage is None:
+            return ToolResult(
+                success=False,
+                error="No stage created yet. Call create_stage first.",
+            )
+
+        asset_path = Path(params["asset_file_path"])
+        asset_name = params["asset_name"]
+        group = params["group"]
+        tx = float(params["translate_x"])
+        ty = float(params["translate_y"])
+        tz = float(params["translate_z"])
+        ry = float(params.get("rotate_y", 0.0))
+
+        self._object_count += 1
+        safe_asset_name = "".join(c for c in asset_name if c.isalnum() or c == "_").strip()
+        prim_path = f"/Scene/{group}/{safe_asset_name}_{self._object_count:02d}"
+
+        # Copy asset to project assets dir
+        assets_dir = self._resolve_assets_dir()
+        local_copy = assets_dir / asset_path.name
+
+        if not local_copy.exists():
+            shutil.copy2(asset_path, local_copy)
+
+        # Use path relative to the stage file
+        relative_path = f"assets/{asset_path.name}"
+
+        scene_object = SceneObject(
+            prim_path=prim_path,
+            asset=AssetMetadata(
+                name=asset_name,
+                source_skill="local",
+                source_id=str(asset_path),
+                file_path=relative_path,
+            ),
+            translate=(tx, ty, tz),
+            rotate=(0.0, ry, 0.0),
+        )
+
+        self.writer.add_reference(scene_object)
+        self.writer.save()
+        self._update_project_meta()
+
+        logger.info(f"Placed {asset_name} at {prim_path} ({tx}, {ty}, {tz})")
+        return ToolResult(
+            success=True,
+            data={
+                "prim_path": prim_path,
+                "asset": asset_name,
+                "position": {"x": tx, "y": ty, "z": tz},
+                "rotation_y": ry,
+                "message": f"Placed {asset_name} at {prim_path}",
+            },
+        )
+
+    def _list_scene(self) -> ToolResult:
+        if self._stage_path is None or self.writer.stage is None:
+            return ToolResult(
+                success=False,
+                error="No stage open. Call create_stage first.",
+            )
+
+        objects = self.writer.list_prims()
+        return ToolResult(
+            success=True,
+            data={
+                "object_count": len(objects),
+                "objects": objects,
+                "message": f"Scene has {len(objects)} object(s).",
+            },
+        )
+
+    def _rename_prim(self, params: dict[str, Any]) -> ToolResult:
+        if self._stage_path is None or self.writer.stage is None:
+            return ToolResult(
+                success=False,
+                error="No stage open. Call create_stage first.",
+            )
+
+        old_path = params["old_path"]
+        new_path = params["new_path"]
+
+        try:
+            success = self.writer.rename_prim(old_path, new_path)
+        except (RuntimeError, ValueError) as e:
+            return ToolResult(success=False, error=str(e))
+
+        if not success:
+            return ToolResult(
+                success=False,
+                error=f"Failed to rename {old_path} to {new_path}",
+            )
+
+        logger.info(f"Renamed {old_path} -> {new_path}")
+        return ToolResult(
+            success=True,
+            data={
+                "old_path": old_path,
+                "new_path": new_path,
+                "message": f"Renamed {old_path} -> {new_path}",
+            },
+        )
+
+    def _remove_prim(self, params: dict[str, Any]) -> ToolResult:
+        if self._stage_path is None or self.writer.stage is None:
+            return ToolResult(
+                success=False,
+                error="No stage open. Call create_stage first.",
+            )
+
+        prim_path = params["prim_path"]
+
+        try:
+            success = self.writer.remove_prim(prim_path)
+        except (RuntimeError, ValueError) as e:
+            return ToolResult(success=False, error=str(e))
+
+        if not success:
+            return ToolResult(
+                success=False,
+                error=f"Failed to remove {prim_path}",
+            )
+
+        self._object_count = max(0, self._object_count - 1)
+        self._update_project_meta()
+
+        logger.info(f"Removed {prim_path}")
+        return ToolResult(
+            success=True,
+            data={
+                "prim_path": prim_path,
+                "message": f"Removed {prim_path}",
+            },
+        )
+
+    def _compute_grid_layout(self, params: dict[str, Any]) -> ToolResult:
+        count = int(params["count"])
+        spacing = float(params.get("spacing", 2.0))
+
+        placements = self.graph.suggest_grid_layout(count=count, spacing=spacing)
+
+        positions = [
+            {"x": round(p.translate[0], 2), "z": round(p.translate[2], 2)}
+            for p in placements
+        ]
+
+        return ToolResult(
+            success=True,
+            data={
+                "count": count,
+                "spacing": spacing,
+                "positions": positions,
+                "message": f"Computed {count} positions in grid with {spacing}m spacing.",
+            },
+        )
+
+    def _validate_scene(self) -> ToolResult:
+        if self._stage_path is None:
+            return ToolResult(
+                success=False,
+                error="No stage to validate. Call create_stage first.",
+            )
+
+        result = self.validator.validate(str(self._stage_path))
+
+        issues = [
+            {"severity": i.severity.value, "message": i.message, "prim": i.prim_path}
+            for i in result.issues
+        ]
+
+        return ToolResult(
+            success=True,
+            data={
+                "is_valid": result.is_valid,
+                "error_count": result.error_count,
+                "issues": issues,
+                "message": "Scene is valid!" if result.is_valid else f"Found {result.error_count} error(s).",
+            },
+        )
+
+    def _package_scene(self) -> ToolResult:
+        if self._stage_path is None:
+            return ToolResult(
+                success=False,
+                error="No stage to package. Call create_stage first.",
+            )
+
+        output_path = self._stage_path.with_suffix(".usdz")
+        result_path = self.packager.package(self._stage_path, output_path)
+
+        logger.info(f"Packaged scene: {result_path}")
+        return ToolResult(
+            success=True,
+            data={
+                "usdz_path": str(result_path),
+                "message": f"Scene packaged to {result_path}",
+            },
+        )
+
+    def validate_config(self) -> bool:
+        """Assembly skill is always valid — no external config needed."""
+        return True
