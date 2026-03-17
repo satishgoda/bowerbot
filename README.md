@@ -8,6 +8,7 @@
 ██████╔╝╚██████╔╝╚███╔███╔╝███████╗██║  ██║██████╔╝╚██████╔╝   ██║
 ╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═╝╚═════╝  ╚═════╝    ╚═╝
 ```
+<img src="docs/mascot.png" alt="BowerBot" width="200">
 
 **AI-powered 3D scene assembly from natural language using OpenUSD.**
 
@@ -276,16 +277,11 @@ Every scene BowerBot produces follows these rules:
 
 ## 🎨 The Mascot
 
-BowerBot's mascot is a **Satin Bowerbird**, known for its iridescent blue-black plumage and obsessive collection of blue objects.
-
-- Deep iridescent blue-black feathers
-- Tiny hard hat (USD orange)
-- A tool belt holding composition arc tools
-- Bright, curious eyes scanning asset providers
-- Surrounded by floating 3D objects being woven into a glowing USD stage
-- Perched on a completed bower that looks like a `UsdStage` hierarchy tree
+<div align="center">
+<img src="docs/mascot.png" alt="BowerBot Mascot" width="300">
 
 *Meticulous. Obsessive about quality. Always collecting. Never done decorating.*
+</div>
 
 ---
 
