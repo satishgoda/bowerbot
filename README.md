@@ -8,7 +8,7 @@
 ██████╔╝╚██████╔╝╚███╔███╔╝███████╗██║  ██║██████╔╝╚██████╔╝   ██║
 ╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═╝╚═════╝  ╚═════╝    ╚═╝
 ```
-<img src="docs/mascot.png" alt="BowerBot" width="200">
+<img src="docs/mascot.jpg" alt="BowerBot" width="200">
 
 **AI-powered 3D scene assembly from natural language using OpenUSD.**
 
@@ -278,7 +278,7 @@ Every scene BowerBot produces follows these rules:
 ## 🎨 The Mascot
 
 <div align="center">
-<img src="docs/mascot.png" alt="BowerBot Mascot" width="300">
+<img src="docs/mascot.jpg" alt="BowerBot Mascot" width="300">
 
 *Meticulous. Obsessive about quality. Always collecting. Never done decorating.*
 </div>
