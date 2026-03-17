@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """SkillRegistry — manages all available skills.
 
 The registry loads skills based on the user's config, validates

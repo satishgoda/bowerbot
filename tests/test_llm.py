@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """Test LLM connectivity through litellm for both providers."""
 
 import asyncio

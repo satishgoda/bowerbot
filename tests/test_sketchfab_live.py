@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """Live test: search Sketchfab for the mug, download it, build a scene."""
 
 import asyncio

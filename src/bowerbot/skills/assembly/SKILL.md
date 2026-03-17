@@ -1,3 +1,4 @@
+<!-- Copyright 2026 Binary Core LLC | SPDX-License-Identifier: Apache-2.0 -->
 # Assembly Skill
 
 You have tools to create and manipulate OpenUSD scenes.

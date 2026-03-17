@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """BowerBot CLI — natural language 3D scene assembly."""
 
 from __future__ import annotations

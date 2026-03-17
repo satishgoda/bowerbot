@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """StageWriter — creates and writes USD stages.
 
 Handles all direct USD API calls: creating stages, adding references,

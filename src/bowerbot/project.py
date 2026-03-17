@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """Project management — one folder, one scene.
 
 A project is a self-contained directory with everything needed

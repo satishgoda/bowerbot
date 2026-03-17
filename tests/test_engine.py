@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """Test the USD Engine pipeline: create → populate → validate → package."""
 
 import tempfile

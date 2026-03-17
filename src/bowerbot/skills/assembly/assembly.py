@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """Assembly skill — exposes USD scene assembly as tools for the LLM.
 
 This skill holds the state of the scene being built (the current USD stage)

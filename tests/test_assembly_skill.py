@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """Test the AssemblySkill tools directly — no LLM involved."""
 
 import asyncio

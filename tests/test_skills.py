@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """Test the Skills layer: Local skill discovers and searches assets."""
 
 import asyncio

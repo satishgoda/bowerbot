@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """AgentRuntime — the 'Architect' layer.
 
 Handles LLM interaction with the 3D-native system prompt.

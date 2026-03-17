@@ -1,3 +1,4 @@
+<!-- Copyright 2026 Binary Core LLC | SPDX-License-Identifier: Apache-2.0 -->
 # Local Asset Cache
 
 You have tools to search previously downloaded 3D assets on disk.

@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """Sketchfab skill — searches and downloads assets from a user's Sketchfab account.
 
 This connects to the authenticated user's OWN model library,

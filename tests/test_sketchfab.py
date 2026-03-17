@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """Test Sketchfab skill — verify API authentication and endpoints."""
 
 import asyncio

@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """Test the full agent loop: user prompt → LLM → tool calls → response."""
 
 import asyncio

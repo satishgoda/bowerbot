@@ -1,3 +1,6 @@
+# Copyright 2026 Binary Core LLC
+# SPDX-License-Identifier: Apache-2.0
+
 """Base skill interface.
 
 Every asset provider, DCC connector, or storage backend

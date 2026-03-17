@@ -1,3 +1,4 @@
+<!-- Copyright 2026 Binary Core LLC | SPDX-License-Identifier: Apache-2.0 -->
 # Sketchfab Skill
 
 You have tools to search and download 3D models from the user's OWN Sketchfab account.
