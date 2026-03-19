@@ -4,7 +4,7 @@
 
 # BowerBot
 
-**AI-powered USD scene assembly, from your assets to production-ready .usdz.**
+**AI-powered OpenUSD scene assembly.**
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/Python-3.12+-blue)](https://www.python.org/)
