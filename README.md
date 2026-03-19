@@ -303,14 +303,9 @@ Every scene BowerBot produces follows these rules:
 
 ## 🤝 Contributing
 
-BowerBot is open source and welcomes contributions. The best way to start is writing a new **skill** for an asset provider you use.
+BowerBot is open source and welcomes contributions. The best way to start is writing a new **skill** for an asset provider you use. See `skills/sketchfab/` for a complete example.
 
-```bash
-git clone https://github.com/binary-core-llc/bowerbot.git
-cd bowerbot
-uv sync
-uv run pytest tests/
-```
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
