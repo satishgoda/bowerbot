@@ -234,6 +234,52 @@ class AssemblySkill(Skill):
                 },
             ),
             Tool(
+                name="move_asset",
+                description=(
+                    "Move an existing object to a new position. "
+                    "Use this instead of place_asset when repositioning "
+                    "an object that is already in the scene."
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "prim_path": {
+                            "type": "string",
+                            "description": (
+                                "Prim path of the object to move "
+                                "(e.g. '/Scene/Products/Mug_01'). "
+                                "Use list_scene to find prim paths."
+                            ),
+                        },
+                        "translate_x": {
+                            "type": "number",
+                            "description": "New X position in meters.",
+                        },
+                        "translate_y": {
+                            "type": "number",
+                            "description": "New Y position in meters.",
+                        },
+                        "translate_z": {
+                            "type": "number",
+                            "description": "New Z position in meters.",
+                        },
+                        "rotate_y": {
+                            "type": "number",
+                            "description": (
+                                "Rotation around Y axis in degrees."
+                            ),
+                            "default": 0.0,
+                        },
+                    },
+                    "required": [
+                        "prim_path",
+                        "translate_x",
+                        "translate_y",
+                        "translate_z",
+                    ],
+                },
+            ),
+            Tool(
                 name="remove_prim",
                 description=(
                     "Remove an object from the scene by its prim path."
@@ -268,6 +314,8 @@ class AssemblySkill(Skill):
                     return self._list_scene()
                 case "rename_prim":
                     return self._rename_prim(params)
+                case "move_asset":
+                    return self._move_asset(params)
                 case "remove_prim":
                     return self._remove_prim(params)
                 case _:
@@ -362,6 +410,44 @@ class AssemblySkill(Skill):
                 "position": {"x": tx, "y": ty, "z": tz},
                 "rotation_y": ry,
                 "message": f"Placed {asset_name} at {prim_path}",
+            },
+        )
+
+    def _move_asset(self, params: dict[str, Any]) -> ToolResult:
+        if self._stage_path is None or self.writer.stage is None:
+            return ToolResult(
+                success=False,
+                error="No stage open. Call create_stage first.",
+            )
+
+        prim_path = params["prim_path"]
+        tx = float(params["translate_x"])
+        ty = float(params["translate_y"])
+        tz = float(params["translate_z"])
+        ry = float(params.get("rotate_y", 0.0))
+
+        try:
+            self.writer.set_transform(
+                prim_path,
+                translate=(tx, ty, tz),
+                rotate=(0.0, ry, 0.0),
+            )
+        except (RuntimeError, ValueError) as e:
+            return ToolResult(success=False, error=str(e))
+
+        self.writer.save()
+
+        logger.info(
+            f"Moved {prim_path} to ({tx}, {ty}, {tz})"
+        )
+        return ToolResult(
+            success=True,
+            data={
+                "prim_path": prim_path,
+                "position": {"x": tx, "y": ty, "z": tz},
+                "rotation_y": ry,
+                "message": f"Moved {prim_path} to "
+                f"({tx}, {ty}, {tz})",
             },
         )
 

@@ -49,17 +49,65 @@ class StageWriter:
 
         self._stage.Save()
 
+    def _compute_unit_scale(self, asset_path: str) -> float:
+        """Return the scale needed to convert asset units to scene units.
+
+        Opens the referenced asset, reads its ``metersPerUnit``, and
+        returns ``asset_mpu / scene_mpu``.  For example a centimetre
+        asset (0.01) in a metre scene (1.0) returns 0.01.
+        """
+        import os
+
+        from pxr import Usd, UsdGeom
+
+        # Resolve relative paths against the stage directory
+        if not os.path.isabs(asset_path):
+            stage_dir = os.path.dirname(
+                self._stage.GetRootLayer().realPath,
+            )
+            asset_path = os.path.join(stage_dir, asset_path)
+
+        asset_stage = Usd.Stage.Open(asset_path)
+        if asset_stage is None:
+            return 1.0
+
+        asset_mpu = UsdGeom.GetStageMetersPerUnit(asset_stage)
+        scene_mpu = UsdGeom.GetStageMetersPerUnit(self._stage)
+        if scene_mpu == 0:
+            return 1.0
+
+        return asset_mpu / scene_mpu
+
+    @staticmethod
+    def _read_existing_scale(xformable):
+        """Read the scale value from a prim's current xform ops."""
+        from pxr import UsdGeom
+
+        for op in xformable.GetOrderedXformOps():
+            if op.GetOpType() == UsdGeom.XformOp.TypeScale:
+                return op.Get()
+        return None
+
     def add_reference(self, scene_object: SceneObject) -> None:
         """Add a referenced asset to the stage at the given prim path."""
-        from pxr import Gf, Sdf, UsdGeom
+        from pxr import Gf, UsdGeom
 
         if self._stage is None:
             msg = "No stage open. Call create_stage() first."
             raise RuntimeError(msg)
 
+        asset_path = (
+            scene_object.asset.file_path
+            or scene_object.asset.source_id
+        )
+
+        # Compute unit conversion before adding the reference
+        unit_scale = self._compute_unit_scale(asset_path)
+
         # Define the prim and add reference
-        prim = self._stage.DefinePrim(scene_object.prim_path, "Xform")
-        asset_path = scene_object.asset.file_path or scene_object.asset.source_id
+        prim = self._stage.DefinePrim(
+            scene_object.prim_path, "Xform",
+        )
         prim.GetReferences().AddReference(asset_path)
 
         # Set transform
@@ -73,9 +121,58 @@ class StageWriter:
         if any(v != 0.0 for v in (rx, ry, rz)):
             xformable.AddRotateXYZOp().Set(Gf.Vec3f(rx, ry, rz))
 
-        sx, sy, sz = scene_object.scale
-        if any(v != 1.0 for v in (sx, sy, sz)):
-            xformable.AddScaleOp().Set(Gf.Vec3f(sx, sy, sz))
+        # Apply unit-conversion scale when the asset uses
+        # different units than the scene (e.g. cm → m).
+        if abs(unit_scale - 1.0) > 1e-6:
+            xformable.AddScaleOp().Set(
+                Gf.Vec3f(unit_scale, unit_scale, unit_scale),
+            )
+        else:
+            sx, sy, sz = scene_object.scale
+            if any(v != 1.0 for v in (sx, sy, sz)):
+                xformable.AddScaleOp().Set(
+                    Gf.Vec3f(sx, sy, sz),
+                )
+
+    def set_transform(
+        self,
+        prim_path: str,
+        translate: tuple[float, float, float],
+        rotate: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    ) -> None:
+        """Update the transform on an existing prim.
+
+        Preserves any unit-conversion scale that was applied when
+        the asset was first referenced.
+        """
+        from pxr import Gf, UsdGeom
+
+        if self._stage is None:
+            msg = "No stage open."
+            raise RuntimeError(msg)
+
+        prim = self._stage.GetPrimAtPath(prim_path)
+        if not prim.IsValid():
+            msg = f"Prim not found: {prim_path}"
+            raise ValueError(msg)
+
+        xformable = UsdGeom.Xformable(prim)
+
+        # Capture the existing scale before clearing ops
+        existing_scale = self._read_existing_scale(xformable)
+
+        xformable.ClearXformOpOrder()
+
+        tx, ty, tz = translate
+        xformable.AddTranslateOp().Set(Gf.Vec3d(tx, ty, tz))
+
+        rx, ry, rz = rotate
+        if any(v != 0.0 for v in (rx, ry, rz)):
+            xformable.AddRotateXYZOp().Set(Gf.Vec3f(rx, ry, rz))
+
+        # Re-apply the scale so unit conversion is preserved
+        if existing_scale is not None:
+            xformable.AddScaleOp().Set(existing_scale)
 
     def save(self) -> None:
         """Save the current stage to disk."""
@@ -86,10 +183,15 @@ class StageWriter:
     
     def list_prims(self) -> list[dict]:
         """List all placed objects (prims with references) in the stage."""
-        from pxr import UsdGeom
+        from pxr import Usd, UsdGeom
 
         if self._stage is None:
             return []
+
+        bbox_cache = UsdGeom.BBoxCache(
+            Usd.TimeCode.Default(),
+            [UsdGeom.Tokens.default_],
+        )
 
         objects = []
         for prim in self._stage.Traverse():
@@ -102,10 +204,39 @@ class StageWriter:
             if xformable:
                 local_xform = xformable.GetLocalTransformation()
                 t = local_xform.ExtractTranslation()
-                position = {"x": round(t[0], 2), "y": round(t[1], 2), "z": round(t[2], 2)}
+                position = {
+                    "x": round(t[0], 2),
+                    "y": round(t[1], 2),
+                    "z": round(t[2], 2),
+                }
+
+            # Compute world-space bounding box so the LLM
+            # can read surface heights from the geometry.
+            bounds = None
+            world_bbox = bbox_cache.ComputeWorldBound(prim)
+            rng = world_bbox.GetRange()
+            if not rng.IsEmpty():
+                mn = rng.GetMin()
+                mx = rng.GetMax()
+                bounds = {
+                    "min": {
+                        "x": round(mn[0], 4),
+                        "y": round(mn[1], 4),
+                        "z": round(mn[2], 4),
+                    },
+                    "max": {
+                        "x": round(mx[0], 4),
+                        "y": round(mx[1], 4),
+                        "z": round(mx[2], 4),
+                    },
+                }
 
             asset_path = None
-            for ref_list in [refs.prependedItems, refs.appendedItems, refs.explicitItems]:
+            for ref_list in [
+                refs.prependedItems,
+                refs.appendedItems,
+                refs.explicitItems,
+            ]:
                 if ref_list:
                     for ref in ref_list:
                         asset_path = ref.assetPath
@@ -115,6 +246,7 @@ class StageWriter:
                 "prim_path": str(prim.GetPath()),
                 "asset": asset_path,
                 "position": position,
+                "bounds": bounds,
             })
 
         return objects

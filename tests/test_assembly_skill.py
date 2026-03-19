@@ -187,6 +187,115 @@ def test_package_scene():
         print(f"✅ test_package_scene PASSED — {usdz_path.name} ({usdz_path.stat().st_size} bytes)")
 
 
+def test_move_asset():
+    """Test 7b: move_asset updates transform without creating a duplicate."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        mug_path = create_test_asset(tmp_path, "mug")
+        table_path = create_test_asset(tmp_path, "table")
+
+        skill, project = make_skill_with_project(tmp_path, "move_test")
+        asyncio.run(skill.execute("create_stage", {"filename": "move_test"}))
+
+        # Place table on floor
+        asyncio.run(skill.execute("place_asset", {
+            "asset_file_path": str(table_path),
+            "asset_name": "Table",
+            "group": "Furniture",
+            "translate_x": 5.0,
+            "translate_y": 0.0,
+            "translate_z": 4.0,
+        }))
+
+        # Place mug on floor (wrong)
+        r = asyncio.run(skill.execute("place_asset", {
+            "asset_file_path": str(mug_path),
+            "asset_name": "Mug",
+            "group": "Products",
+            "translate_x": 5.0,
+            "translate_y": 0.0,
+            "translate_z": 4.0,
+        }))
+        assert r.success
+        mug_prim_path = r.data["prim_path"]
+
+        # Move mug onto table surface
+        r = asyncio.run(skill.execute("move_asset", {
+            "prim_path": mug_prim_path,
+            "translate_x": 5.0,
+            "translate_y": 0.75,
+            "translate_z": 4.0,
+        }))
+        assert r.success
+
+        # Verify position updated in USD
+        stage = Usd.Stage.Open(str(project.scene_path))
+        prim = stage.GetPrimAtPath(mug_prim_path)
+        assert prim.IsValid(), f"Prim not found: {mug_prim_path}"
+
+        xformable = UsdGeom.Xformable(prim)
+        t = xformable.GetLocalTransformation().ExtractTranslation()
+        assert abs(t[1] - 0.75) < 0.01, f"Y should be 0.75, got {t[1]}"
+
+        # Verify no duplicate was created
+        objects = skill.writer.list_prims()
+        mug_prims = [o for o in objects if "Mug" in o["prim_path"]]
+        assert len(mug_prims) == 1, (
+            f"Expected 1 mug prim, got {len(mug_prims)}: {mug_prims}"
+        )
+
+        print("✅ test_move_asset PASSED")
+
+
+def test_unit_conversion():
+    """Test 8: Assets in cm are auto-scaled to meters."""
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+
+        # Create a cm asset (metersPerUnit=0.01, 80cm tall cube)
+        cm_asset = tmp_path / "table_cm.usda"
+        stage = Usd.Stage.CreateNew(str(cm_asset))
+        UsdGeom.SetStageMetersPerUnit(stage, 0.01)
+        UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
+        root = stage.DefinePrim("/table", "Xform")
+        stage.SetDefaultPrim(root)
+        cube = UsdGeom.Cube.Define(stage, "/table/Mesh")
+        cube.GetSizeAttr().Set(80.0)  # 80 cm
+        stage.Save()
+
+        skill, project = make_skill_with_project(
+            tmp_path, "unit_test",
+        )
+        asyncio.run(skill.execute(
+            "create_stage", {"filename": "unit_test"},
+        ))
+
+        r = asyncio.run(skill.execute("place_asset", {
+            "asset_file_path": str(cm_asset),
+            "asset_name": "Table",
+            "group": "Furniture",
+            "translate_x": 5.0,
+            "translate_y": 0.0,
+            "translate_z": 4.0,
+        }))
+        assert r.success, f"Failed: {r.error}"
+
+        # list_scene should report bounds in metres
+        r = asyncio.run(skill.execute("list_scene", {}))
+        assert r.success
+        table_obj = r.data["objects"][0]
+        bounds = table_obj["bounds"]
+
+        # 80 cm cube → 0.8m in each axis, centered at origin
+        # placed at (5, 0, 4) → max.y should be ~0.4
+        height = bounds["max"]["y"] - bounds["min"]["y"]
+        assert 0.7 < height < 0.9, (
+            f"Expected ~0.8m height, got {height}"
+        )
+
+        print("✅ test_unit_conversion PASSED")
+
+
 def test_full_pipeline():
     """Test 7: Full pipeline — create → place → validate → package."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -244,5 +353,7 @@ if __name__ == "__main__":
     test_compute_grid_layout()
     test_validate_scene()
     test_package_scene()
+    test_move_asset()
+    test_unit_conversion()
     test_full_pipeline()
     print("\n🎉 All assembly skill tests passed!")

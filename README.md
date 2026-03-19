@@ -4,12 +4,12 @@
 
 # BowerBot
 
-**AI-powered 3D scene assembly from natural language using OpenUSD.**
+**AI-powered USD scene assembly, from your assets to production-ready .usdz.**
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/Python-3.12+-blue)](https://www.python.org/)
 [![OpenUSD](https://img.shields.io/badge/OpenUSD-25.x-green)](https://openusd.org)
-[![Built by Binary Core LLC](https://img.shields.io/badge/Built%20by-Binary%20Core%20LLC-black)](https://binarycore.io)
+[![Built by Binary Core LLC](https://img.shields.io/badge/Built%20by-Binary%20Core%20LLC-black)](https://binarycore.us)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 </div>
@@ -24,9 +24,7 @@ Unlike any other creature, the male bowerbird doesn't attract mates with flashy 
 
 **BowerBot does the same thing for your 3D pipeline.**
 
-Describe a scene in plain language. BowerBot reaches out to your Sketchfab account, your local asset cache, and any connected provider. It collects exactly what it needs and assembles a production-ready **OpenUSD stage**.
-
-You talk. BowerBot builds.
+Point it at your Sketchfab account, your local asset cache, or any connected provider. BowerBot fetches what you need and assembles a production-ready **OpenUSD stage**. You focus on the creative decisions. BowerBot handles the pipeline.
 
 ---
 
@@ -35,48 +33,46 @@ You talk. BowerBot builds.
 ```
 $ bowerbot open coffee_shop
 
-You: Search my Sketchfab for a mug and place it centered on a table surface
-BowerBot: Downloaded mug (USDZ). Placed at /Scene/Products/mug_01 (5.0, 0.75, 4.0).
+You: Search my Sketchfab for a round bistro table and download it
+BowerBot: Found "Round Bistro Table". Downloaded to assets/Round_Bistro_Table.usdz
 
-You: Add 4 tables in a grid with 3m spacing
-BowerBot: Computed grid layout. Placed 4 tables in Furniture group.
+You: Place it at the center of the room
+BowerBot: Placed at /Scene/Furniture/Round_Bistro_Table_01 (5.0, 0.0, 4.0)
 
-You: Show me the scene structure
-BowerBot: Scene has 5 objects:
-  - /Scene/Furniture/Table_01 at (3.5, 0.0, 4.0)
-  - /Scene/Furniture/Table_02 at (6.5, 0.0, 4.0)
-  - /Scene/Furniture/Table_03 at (3.5, 0.0, 7.0)
-  - /Scene/Furniture/Table_04 at (6.5, 0.0, 7.0)
-  - /Scene/Products/mug_01 at (5.0, 0.75, 4.0)
+You: Find an espresso cup in my local assets and place it on the table surface
+BowerBot: Found espresso_cup.usdz. Table surface at Y=0.74.
+         Placed at /Scene/Products/Espresso_Cup_01 (5.0, 0.74, 4.0)
 
-You: Rename the mug to /Scene/Display/CoffeeMug
-BowerBot: Renamed /Scene/Products/mug_01 to /Scene/Display/CoffeeMug
+You: Move the cup to the left side of the table
+BowerBot: Moved to (4.7, 0.74, 4.0) — within table bounds.
 
 You: Validate and package
-BowerBot: Scene valid. Packaged to scenes/coffee_shop/scene.usdz
+BowerBot: All checks passed. Packaged to scenes/coffee_shop/scene.usdz
 ```
 
-Close the session, come back tomorrow, and pick up where you left off. Projects are persistent.
+Open the `.usda` in Maya, usdview, or any USD viewer to fine-tune. Close the session, come back tomorrow, and pick up where you left off. Projects are persistent.
 
 ---
 
 ## ✨ Features
 
-- 🗣️ **Natural language scene assembly** : describe what you want, get a USD stage
-- 📦 **OpenUSD native** : references, defaultPrim, metersPerUnit, upAxis, all correct
+- 📦 **OpenUSD native** : references, defaultPrim, metersPerUnit, upAxis, all correct out of the box
 - 🔌 **Pluggable skills** : Sketchfab, local asset cache, and easy to add more
+- 🧩 **Automatic unit handling** : assets in cm, mm, or inches are scaled correctly at reference time
+- 📐 **Geometry-aware** : uses bounding boxes to place objects on surfaces, not guesswork
+- 🗣️ **Conversational assembly** : search, download, place, and adjust assets through chat
 - 🧠 **Multi-LLM support** : OpenAI, Anthropic, and any provider via [litellm](https://docs.litellm.ai/)
 - 📁 **Project-based workflow** : one folder per scene, resumable across sessions
 - ✅ **Scene validation** : catches USD errors before they reach your DCC
 - 📦 **USDZ packaging** : export for Apple Vision Pro, Omniverse, or any USD viewer
 - 🏗️ **Onboarding wizard** : zero-config setup in 60 seconds
-- 🎯 **SKILL.md system** : each skill teaches the LLM how to use it via natural language
+- 🎯 **SKILL.md system** : modular prompts, each skill teaches the LLM how to use it
 
 ---
 
 ## 🚀 Quick Start
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+Requires [uv](https://docs.astral.sh/uv/) (handles Python automatically).
 
 ```bash
 # Clone
@@ -149,14 +145,15 @@ Skills are pluggable tools the agent uses. Each skill has a Python module for ex
 
 ### Built-in Skills
 
-**Assembly** (always active) : 8 tools for USD scene building
+**Assembly** (always active) : 9 tools for USD scene building
 
 | Tool | Description |
 |------|-------------|
 | `create_stage` | Initialize a new USD scene with standard hierarchy |
-| `place_asset` | Add an asset with position and rotation |
+| `place_asset` | Add an asset with position, rotation, and auto unit conversion |
+| `move_asset` | Reposition an existing object without creating duplicates |
 | `compute_grid_layout` | Calculate evenly spaced positions |
-| `list_scene` | Show current scene contents |
+| `list_scene` | Show current scene with positions and bounding boxes |
 | `rename_prim` | Move/rename objects in the hierarchy |
 | `remove_prim` | Delete objects from the scene |
 | `validate_scene` | Check for USD errors |
@@ -266,6 +263,7 @@ Every scene BowerBot produces follows these rules:
 - `defaultPrim` always set
 - Standard hierarchy: `/Scene/Architecture`, `/Scene/Furniture`, `/Scene/Products`, `/Scene/Lighting`, `/Scene/Props`
 - Validated before packaging
+- Automatic unit conversion for assets with different `metersPerUnit`
 
 ---
 
@@ -285,15 +283,19 @@ Every scene BowerBot produces follows these rules:
 - [x] CLI (chat, new, open, list, build, skills, info, onboard)
 - [x] Sketchfab skill (search user's own models, USDZ download)
 - [x] Local asset cache skill
-- [x] Assembly skill (8 tools: create, place, grid, list, rename, remove, validate, package)
+- [x] Assembly skill (9 tools: create, place, move, grid, list, rename, remove, validate, package)
 - [x] SKILL.md system (modular prompts per skill)
 - [x] Project-based workflow with persistence
 - [x] Multi-LLM support (OpenAI, Anthropic via litellm)
+- [x] Automatic unit conversion (cm/mm/inches to meters)
+- [x] Geometry-aware surface placement
 - [x] Onboarding wizard
+- [ ] Scene templates : JSON-driven scene assembly with asset resolution
+- [ ] DCC exporter : tool to export scene layout as BowerBot JSON
 - [ ] Error recovery : validator errors fed back to LLM for auto-retry
 - [ ] Token management : conversation summarization for long sessions
-- [ ] MCP Gateway : FastAPI server for web UI and external AI clients
 - [ ] More skills : Fab, PolyHaven, Objaverse, CGTrader
+- [ ] MCP Gateway : FastAPI server for web UI and external AI clients
 - [ ] Web UI : chat panel + live 3D viewport
 - [ ] BowerHub : community skill registry
 
