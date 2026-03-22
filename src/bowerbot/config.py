@@ -33,6 +33,17 @@ class LLMSettings(BaseSettings):
     temperature: float = 0.1
     max_tokens: int = 4096
 
+    # Token management
+    context_window: int | None = None  # None = auto-detect from litellm
+    summarization_threshold: float = 0.75  # fraction of budget before summarizing
+    tool_result_age_threshold: int = 2  # user turns before compressing tool results
+    min_keep_recent: int = 6  # minimum recent messages kept verbatim
+    summary_max_tokens: int = 512  # max tokens for the summarization call
+
+    # Error recovery
+    num_retries: int = 3  # retries for rate limits and transient errors
+    request_timeout: float = 120.0  # seconds before a request times out
+
 
 class SkillConfig(BaseSettings):
     """Configuration for a single skill."""
