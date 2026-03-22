@@ -8,7 +8,10 @@ and all referenced assets, ready for distribution.
 """
 
 import logging
+import os
 from pathlib import Path
+
+from pxr import UsdUtils
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +25,6 @@ class Packager:
         Uses UsdUtils.CreateNewUsdzPackage to bundle the root layer
         and all of its dependencies into a single .usdz file.
         """
-        import os
-
-        from pxr import UsdUtils
-
         stage_path = Path(stage_path)
         output_path = Path(output_path).with_suffix(".usdz")
 

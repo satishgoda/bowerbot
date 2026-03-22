@@ -8,6 +8,7 @@ Pure deterministic math — no AI. The LLM says 'grid of 4 tables',
 this module computes the actual positions.
 """
 
+import math
 from dataclasses import dataclass
 
 from bowerbot.schemas import PlacementCategory
@@ -63,8 +64,6 @@ class SceneGraphBuilder:
         Automatically determines rows/columns to fit the count,
         centered in the room or at the specified center point.
         """
-        import math
-
         if count <= 0:
             return []
 

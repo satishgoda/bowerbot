@@ -8,6 +8,8 @@ overlapping objects, missing references, scale inconsistencies,
 missing defaultPrim, etc.
 """
 
+from pxr import Usd, UsdGeom
+
 from bowerbot.schemas import Severity, ValidationIssue, ValidationResult
 
 
@@ -20,7 +22,6 @@ class SceneValidator:
 
     def validate(self, stage_path: str) -> ValidationResult:
         """Run all validation checks on a USD stage."""
-        from pxr import Usd, UsdGeom
 
         stage = Usd.Stage.Open(stage_path)
         if stage is None:
@@ -57,7 +58,6 @@ class SceneValidator:
 
     def _check_meters_per_unit(self, stage) -> list[ValidationIssue]:  # noqa: ANN001
         """metersPerUnit must match expected value."""
-        from pxr import UsdGeom
 
         actual = UsdGeom.GetStageMetersPerUnit(stage)
         if abs(actual - self.expected_meters_per_unit) > 1e-6:
@@ -74,7 +74,6 @@ class SceneValidator:
 
     def _check_up_axis(self, stage) -> list[ValidationIssue]:  # noqa: ANN001
         """upAxis must match expected value."""
-        from pxr import UsdGeom
 
         actual = UsdGeom.GetStageUpAxis(stage)
         expected_token = (

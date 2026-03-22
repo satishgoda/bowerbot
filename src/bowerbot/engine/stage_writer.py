@@ -7,7 +7,10 @@ Handles all direct USD API calls: creating stages, adding references,
 setting transforms, managing composition arcs.
 """
 
+import os
 from pathlib import Path
+
+from pxr import Gf, Kind, Sdf, Usd, UsdGeom
 
 from bowerbot.schemas import SceneObject
 
@@ -26,7 +29,6 @@ class StageWriter:
 
     def create_stage(self, path: str | Path) -> None:
         """Create a new USD stage with BowerBot defaults."""
-        from pxr import Kind, Usd, UsdGeom
 
         path = str(path)
         self._stage = Usd.Stage.CreateNew(path)
@@ -56,9 +58,6 @@ class StageWriter:
         returns ``asset_mpu / scene_mpu``.  For example a centimetre
         asset (0.01) in a metre scene (1.0) returns 0.01.
         """
-        import os
-
-        from pxr import Usd, UsdGeom
 
         # Resolve relative paths against the stage directory
         if not os.path.isabs(asset_path):
@@ -81,7 +80,6 @@ class StageWriter:
     @staticmethod
     def _read_existing_scale(xformable):
         """Read the scale value from a prim's current xform ops."""
-        from pxr import UsdGeom
 
         for op in xformable.GetOrderedXformOps():
             if op.GetOpType() == UsdGeom.XformOp.TypeScale:
@@ -90,7 +88,6 @@ class StageWriter:
 
     def add_reference(self, scene_object: SceneObject) -> None:
         """Add a referenced asset to the stage at the given prim path."""
-        from pxr import Gf, UsdGeom
 
         if self._stage is None:
             msg = "No stage open. Call create_stage() first."
@@ -145,7 +142,6 @@ class StageWriter:
         Preserves any unit-conversion scale that was applied when
         the asset was first referenced.
         """
-        from pxr import Gf, UsdGeom
 
         if self._stage is None:
             msg = "No stage open."
@@ -183,7 +179,6 @@ class StageWriter:
     
     def list_prims(self) -> list[dict]:
         """List all placed objects (prims with references) in the stage."""
-        from pxr import Usd, UsdGeom
 
         if self._stage is None:
             return []
@@ -214,7 +209,7 @@ class StageWriter:
             # can read surface heights from the geometry.
             bounds = None
             world_bbox = bbox_cache.ComputeWorldBound(prim)
-            rng = world_bbox.GetRange()
+            rng = world_bbox.ComputeAlignedRange()
             if not rng.IsEmpty():
                 mn = rng.GetMin()
                 mx = rng.GetMax()
@@ -253,7 +248,6 @@ class StageWriter:
 
     def rename_prim(self, old_path: str, new_path: str) -> bool:
         """Move/rename a prim to a new path in the hierarchy."""
-        from pxr import Sdf, Usd
 
         if self._stage is None:
             msg = "No stage open."
@@ -285,7 +279,6 @@ class StageWriter:
 
     def remove_prim(self, prim_path: str) -> bool:
         """Remove a prim from the stage."""
-        from pxr import Usd
 
         if self._stage is None:
             msg = "No stage open."
@@ -304,7 +297,6 @@ class StageWriter:
 
     def open_stage(self, path: str | Path) -> None:
         """Open an existing USD stage from disk."""
-        from pxr import Usd
         self._stage = Usd.Stage.Open(str(path))
 
     @property
