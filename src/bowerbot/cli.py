@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import click
+import litellm
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -227,6 +228,26 @@ async def _chat_loop(agent, console: Console) -> None:
             console.print(f"\n[sf]BowerBot:[/] {response}")
         except KeyboardInterrupt:
             console.print("\n[info]Interrupted. Type 'quit' to exit.[/]")
+        except litellm.AuthenticationError:
+            console.print(
+                "\n[red]Authentication failed.[/] "
+                "Check your API key with 'bowerbot info'."
+            )
+        except litellm.RateLimitError:
+            console.print(
+                "\n[yellow]Rate limited.[/] "
+                "Retries exhausted — wait a moment and try again."
+            )
+        except litellm.APIConnectionError:
+            console.print(
+                "\n[red]Cannot reach API.[/] "
+                "Check your network connection."
+            )
+        except litellm.Timeout:
+            console.print(
+                "\n[yellow]Request timed out.[/] "
+                "Try again or increase request_timeout in config."
+            )
         except Exception as e:
             console.print(f"\n[red]Error:[/] {e}")
             console.print("[info]You can keep going or type 'reset' to start over.[/]")
@@ -271,8 +292,32 @@ def build(prompt: str) -> None:
     from bowerbot.agent import AgentRuntime
 
     agent = AgentRuntime(settings=settings, skill_registry=registry)
-    response = asyncio.run(agent.process(prompt))
-    console.print(f"\n{response}")
+
+    try:
+        response = asyncio.run(agent.process(prompt))
+        console.print(f"\n{response}")
+    except litellm.AuthenticationError:
+        console.print(
+            "\n[red]Authentication failed.[/] "
+            "Check your API key with 'bowerbot info'."
+        )
+    except litellm.RateLimitError:
+        console.print(
+            "\n[yellow]Rate limited.[/] "
+            "Retries exhausted — wait a moment and try again."
+        )
+    except litellm.APIConnectionError:
+        console.print(
+            "\n[red]Cannot reach API.[/] "
+            "Check your network connection."
+        )
+    except litellm.Timeout:
+        console.print(
+            "\n[yellow]Request timed out.[/] "
+            "Try again or increase request_timeout in config."
+        )
+    except Exception as e:
+        console.print(f"\n[red]Error:[/] {e}")
 
 
 @main.command()
