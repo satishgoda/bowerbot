@@ -14,6 +14,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from bowerbot.skills.base import Skill, SkillCategory, Tool, ToolResult
 
 logger = logging.getLogger(__name__)
@@ -122,12 +124,11 @@ class SketchfabSkill(Skill):
                 case _:
                     return ToolResult(success=False, error=f"Unknown tool: {tool_name}")
         except Exception as e:
-            logger.exception(f"Sketchfab error: {tool_name}")
+            logger.debug(f"Sketchfab error: {tool_name}", exc_info=True)
             return ToolResult(success=False, error=str(e))
 
     async def _search_my_models(self, params: dict[str, Any]) -> ToolResult:
         """Search the authenticated user's own models."""
-        import httpx
 
         query = params["query"]
         max_results = min(params.get("max_results", 10), 24)
@@ -149,7 +150,6 @@ class SketchfabSkill(Skill):
 
     async def _list_my_models(self, params: dict[str, Any]) -> ToolResult:
         """List all models in the user's account."""
-        import httpx
 
         max_results = min(params.get("max_results", 24), 24)
 
@@ -167,7 +167,6 @@ class SketchfabSkill(Skill):
 
     async def _download_model(self, params: dict[str, Any]) -> ToolResult:
         """Download a model in USDZ format only."""
-        import httpx
 
         uid = params["uid"]
         name = params["name"]
@@ -233,6 +232,7 @@ class SketchfabSkill(Skill):
             results.append({
                 "uid": model["uid"],
                 "name": model["name"],
+                "description": model.get("description", ""),
                 "url": model.get("viewerUrl", ""),
                 "vertex_count": model.get("vertexCount"),
                 "face_count": model.get("faceCount"),
