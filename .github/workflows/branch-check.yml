@@ -1,0 +1,30 @@
+name: Branch Name Check
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check-branch-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate branch name
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          PATTERN="^(feat|fix|docs|refactor|test|chore)/.+$"
+
+          if [[ ! "$BRANCH" =~ $PATTERN ]]; then
+            echo "❌ Invalid branch name: '$BRANCH'"
+            echo ""
+            echo "Branch names must follow: type/short-description"
+            echo "Valid types: feat, fix, docs, refactor, test, chore"
+            echo ""
+            echo "Examples:"
+            echo "  feat/polyhaven-skill"
+            echo "  fix/bounding-box-scale"
+            echo "  docs/update-readme"
+            exit 1
+          fi
+
+          echo "✅ Branch name '$BRANCH' is valid"

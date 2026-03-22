@@ -68,10 +68,36 @@ See `skills/sketchfab/` for a complete example.
 uv run pytest
 ```
 
-## Pull Requests
+## Branch Naming
 
-1. Fork the repo and create a feature branch
-2. Use conventional commit messages
-3. Add tests for new functionality
-4. Run `uv run pytest` before submitting
-5. Keep PRs focused — one feature or fix per PR
+Branch names must follow the pattern `type/short-description`:
+
+```
+feat/polyhaven-skill
+fix/bounding-box-scale
+docs/update-readme
+refactor/move-imports
+test/token-manager
+chore/ci-setup
+```
+
+The type prefix must match one of the conventional commit types (`feat`, `fix`, `docs`, `refactor`, `test`, `chore`). This is enforced by CI.
+
+## Pull Request Workflow
+
+1. Create a branch from `main` using the naming convention above
+2. Make your changes — commit however you like on your branch
+3. Open a PR to `main`
+4. **Squash merge** — the squash commit message should use conventional format (e.g., `feat: add PolyHaven skill`)
+5. Release Please reads that commit and handles versioning automatically
+
+```
+feat/my-feature → PR → squash merge "feat: ..." → main → Release Please
+```
+
+### PR checklist
+
+- [ ] Branch name follows `type/description` convention
+- [ ] Tests pass (`uv run pytest`)
+- [ ] One feature or fix per PR
+- [ ] New functionality includes tests
